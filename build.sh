@@ -4,7 +4,7 @@
 image_names=("mriffle/carafe" "quay.io/protio/carafe")
 
 # Versions
-versions=("latest" "0.0.1")
+versions=("latest" "2.0.0-beta")
 
 # SSH key path (default to ~/.ssh/id_rsa)
 SSH_KEY_PATH="$HOME/.ssh/id_rsa"

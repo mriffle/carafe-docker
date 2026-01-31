@@ -1,5 +1,11 @@
+# Set Carafe version as a build argument
+ARG CARAFE_VERSION=2.0.0-beta
+
 # Use Ubuntu as the base image
-FROM ubuntu:20.04 AS builder
+FROM ubuntu:24.04 AS builder
+
+# Set Carafe version as a build argument
+ARG CARAFE_VERSION
 
 # Set environment variables
 ENV DEBIAN_FRONTEND=noninteractive \
@@ -7,15 +13,12 @@ ENV DEBIAN_FRONTEND=noninteractive \
     LANG=C.UTF-8 \
     LC_ALL=C.UTF-8
 
-# Set Carafe version as a build argument
-ARG CARAFE_VERSION=0.0.1
-
 # Install necessary packages
 RUN apt-get update && apt-get install -y --no-install-recommends \
     wget \
     git \
     unzip \
-    openjdk-11-jdk \
+    openjdk-21-jdk \
     openssh-client \
     && rm -rf /var/lib/apt/lists/*
 
@@ -25,14 +28,12 @@ RUN wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -
     && rm miniconda.sh \
     && ln -s /opt/conda/etc/profile.d/conda.sh /etc/profile.d/conda.sh \
     && echo ". /opt/conda/etc/profile.d/conda.sh" >> ~/.bashrc \
-    && echo "conda activate carafe" >> ~/.bashrc
-
-# Add GitHub to known hosts
-RUN mkdir -p /root/.ssh && \
-    ssh-keyscan github.com >> /root/.ssh/known_hosts
+    && echo "conda activate carafe" >> ~/.bashrc \
+    && conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/main \
+    && conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/r
 
 # Clone AlphaPeptDeep-DIA repository
-RUN --mount=type=ssh git clone --depth 1 git@github.com:wenbostar/alphapeptdeep_dia.git
+RUN git clone https://github.com/wenbostar/alphapeptdeep_dia
 
 # Create and activate conda environment
 RUN cd alphapeptdeep_dia \
@@ -55,12 +56,19 @@ RUN unzip /tmp/carafe-${CARAFE_VERSION}.zip -d /opt/carafe \
     && rm /tmp/carafe-${CARAFE_VERSION}.zip
 
 # Start a new stage for the final image
-FROM ubuntu:20.04
+FROM ubuntu:24.04
+
+ARG CARAFE_VERSION
+ENV CARAFE_VERSION=${CARAFE_VERSION}
 
 # Copy necessary files from builder stage
 COPY --from=builder /opt/conda /opt/conda
 COPY --from=builder /opt/carafe /opt/carafe
 COPY --from=builder /root/.bashrc /root/.bashrc
+
+# Copy other necessary items from local disk
+COPY entrypoint.sh /usr/local/bin/
+COPY pretrained_models.zip /data/peptdeep/pretrained_models/
 
 # Set environment variables
 ENV PATH="/opt/conda/bin:${PATH}" \
@@ -72,17 +80,13 @@ ENV HF_HOME=/tmp/huggingface
 
 # Install minimal runtime dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    openjdk-11-jre-headless \
+    openjdk-21-jre-headless \
     && rm -rf /var/lib/apt/lists/* \
     && mkdir /tmp/huggingface && chmod 777 /tmp/huggingface \
-    && mkdir /peptdeep && chmod 777 /peptdeep
+    && chmod +x /usr/local/bin/entrypoint.sh
 
 # Set the working directory
 WORKDIR /app
-
-# Copy entrypoint script
-COPY entrypoint.sh /usr/local/bin/
-RUN chmod +x /usr/local/bin/entrypoint.sh
 
 # Set the entrypoint
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
