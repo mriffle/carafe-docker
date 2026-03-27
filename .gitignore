@@ -1,2 +1,1 @@
-carafe-0.0.1.zip
-
+# Carafe release archives are downloaded during docker build and are not stored locally.

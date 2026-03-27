@@ -1,5 +1,5 @@
 # Set Carafe version as a build argument
-ARG CARAFE_VERSION=2.0.0-beta
+ARG CARAFE_VERSION
 
 # Use Ubuntu as the base image
 FROM ubuntu:24.04 AS builder
@@ -19,7 +19,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     unzip \
     openjdk-21-jdk \
-    openssh-client \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Miniconda
@@ -50,10 +49,11 @@ RUN source /opt/conda/etc/profile.d/conda.sh \
     && find /opt/conda -follow -type f -name '*.a' -delete \
     && find /opt/conda -follow -type f -name '*.js.map' -delete
 
-# Copy and install Carafe from local file
-COPY carafe-${CARAFE_VERSION}.zip /tmp/
-RUN unzip /tmp/carafe-${CARAFE_VERSION}.zip -d /opt/carafe \
-    && rm /tmp/carafe-${CARAFE_VERSION}.zip
+# Download and install Carafe from the matching GitHub release
+RUN test -n "${CARAFE_VERSION}" || (echo "CARAFE_VERSION build arg is required" >&2; exit 1) \
+    && wget -O /tmp/carafe.zip "https://github.com/Noble-Lab/Carafe/releases/download/v${CARAFE_VERSION}/carafe-${CARAFE_VERSION}.zip" \
+    && unzip /tmp/carafe.zip -d /opt/carafe \
+    && rm /tmp/carafe.zip
 
 # Start a new stage for the final image
 FROM ubuntu:24.04
