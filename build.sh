@@ -1,68 +1,130 @@
-#!/bin/bash
+#!/usr/bin/env bash
+
+set -euo pipefail
 
 # Docker image names
 image_names=("mriffle/carafe" "quay.io/protio/carafe")
 
-# Versions
-versions=("latest" "2.0.0-beta")
+# Build options
+carafe_version=""
+push=false
+tag_latest=false
+build_log=""
 
-# SSH key path (default to ~/.ssh/id_rsa)
-SSH_KEY_PATH="$HOME/.ssh/id_rsa"
-
-# Function to print usage
 print_usage() {
-    echo "Usage: $0 [--push] [--ssh-key PATH]"
-    echo "  --push              Push images after building"
-    echo "  --ssh-key PATH      Specify the SSH key path (default: ~/.ssh/id_rsa)"
+    cat <<'EOF'
+Usage: ./build.sh <carafe-version> [--push] [--latest-tag] [--build-log <path>]
+
+Arguments:
+  <carafe-version>  Carafe release version, for example: 2.0.0
+
+Options:
+  --push            Push images after building
+  --latest-tag      Also tag and optionally push the images as :latest
+  --build-log       Write docker build output to the specified log file
+  -h, --help        Show this help message
+
+Examples:
+  ./build.sh 2.0.0
+  ./build.sh 2.0.0 --push
+  ./build.sh 2.0.0 --push --latest-tag
+  ./build.sh 2.0.0 --build-log /tmp/carafe-build.log
+EOF
 }
 
-# Function to build images
 build_images() {
-    build_command="DOCKER_BUILDKIT=1 sudo docker build --ssh default=$SSH_KEY_PATH"
-    
-    # Add tags
+    local build_command=(
+        docker
+        build
+        --build-arg
+        "CARAFE_VERSION=${carafe_version}"
+    )
+
+    local name
     for name in "${image_names[@]}"; do
-        for version in "${versions[@]}"; do
-            build_command+=" -t ${name}:${version}"
-        done
+        build_command+=(-t "${name}:${carafe_version}")
+        if [[ "${tag_latest}" == true ]]; then
+            build_command+=(-t "${name}:latest")
+        fi
     done
-    
-    build_command+=" ."
-    
-    echo "Building images..."
-    echo "Executing: $build_command"
-    eval $build_command
+
+    build_command+=(.)
+
+    echo "Building images for Carafe ${carafe_version}..."
+    printf 'Executing: DOCKER_BUILDKIT=1'
+    printf ' %q' "${build_command[@]}"
+    printf '\n'
+
+    if [[ -n "${build_log}" ]]; then
+        mkdir -p "$(dirname "${build_log}")"
+        echo "Writing Docker build log to ${build_log}"
+        env DOCKER_BUILDKIT=1 "${build_command[@]}" 2>&1 | tee "${build_log}"
+    else
+        DOCKER_BUILDKIT=1 "${build_command[@]}"
+    fi
 }
 
-# Function to push images
 push_images() {
+    local name
+
     echo "Pushing images..."
     for name in "${image_names[@]}"; do
-        for version in "${versions[@]}"; do
-            echo "Pushing ${name}:${version}"
-            sudo docker push "${name}:${version}"
-        done
+        echo "Pushing ${name}:${carafe_version}"
+        docker push "${name}:${carafe_version}"
+
+        if [[ "${tag_latest}" == true ]]; then
+            echo "Pushing ${name}:latest"
+            docker push "${name}:latest"
+        fi
     done
 }
 
-# Main script
-push=false
-
-# Parse command line arguments
 while [[ "$#" -gt 0 ]]; do
-    case $1 in
-        --push) push=true ;;
-        --ssh-key) SSH_KEY_PATH="$2"; shift ;;
-        -h|--help) print_usage; exit 0 ;;
-        *) echo "Unknown parameter: $1"; print_usage; exit 1 ;;
+    case "$1" in
+        --push)
+            push=true
+            ;;
+        --latest-tag)
+            tag_latest=true
+            ;;
+        --build-log)
+            if [[ "$#" -lt 2 ]]; then
+                echo "--build-log requires a path argument." >&2
+                print_usage
+                exit 1
+            fi
+            build_log="$2"
+            shift
+            ;;
+        -h|--help)
+            print_usage
+            exit 0
+            ;;
+        -*)
+            echo "Unknown option: $1" >&2
+            print_usage
+            exit 1
+            ;;
+        *)
+            if [[ -n "${carafe_version}" ]]; then
+                echo "Carafe version already set to ${carafe_version}; unexpected extra argument: $1" >&2
+                print_usage
+                exit 1
+            fi
+            carafe_version="$1"
+            ;;
     esac
     shift
 done
 
-# Build images
+if [[ -z "${carafe_version}" ]]; then
+    echo "A Carafe version is required." >&2
+    print_usage
+    exit 1
+fi
+
 build_images
 
-# Push images if --push is specified
-if $push; then
+if [[ "${push}" == true ]]; then
     push_images
 fi
