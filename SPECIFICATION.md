@@ -59,11 +59,12 @@ The repository is intentionally small. The current tracked files are:
 - `build.sh`: helper script that requires a Carafe version, builds matching image tags, can write the Docker build output to a log file, and optionally pushes images
 - `test/test_carafe_image.sh`: local smoke test that builds the image, can forward build flags and build-log output to `build.sh`, and runs Carafe inside the container
 - `test/run_test_data_in_container.sh`: helper that mounts `test-data/` into the built container and runs `test-data/test-carafe.sh`
-- `test-data/`: sample mzML, parquet, fasta, and shell-script inputs for a mounted-data Carafe run
+- `test-data/`: sample mzML, parquet, fasta, tsv, and shell-script inputs for a mounted-data Carafe run
 - `.github/workflows/ci.yml`: GitHub Actions workflow that runs the image build and smoke test on push
 - `README.md`: minimal placeholder readme
 - `LICENSE`: Apache 2.0 license text
-- `.gitignore`: note explaining that Carafe release archives are no longer stored locally
+- `.gitignore`: ignores `test-data/*` except `test-data/test-carafe.sh` so binary test inputs are not tracked; includes a note that Carafe release archives are downloaded during build
+- `SPECIFICATION.md`: this file — project specification and onboarding document
 
 ## High-Level Architecture
 
@@ -437,7 +438,7 @@ These are current project realities, not theoretical concerns:
   - `ubuntu:24.04`
   - GitHub-hosted Carafe release assets
   - the upstream dependency sources contacted by Carafe's bundled `PyInstaller`
-- There are no automated tests or validation steps in this repository
+- The smoke test validates image structure and `java -jar ... -h` but does not run a full Carafe analysis
 
 ## How to Modify the Project Safely
 
