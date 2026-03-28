@@ -1,1 +1,3 @@
 # Carafe release archives are downloaded during docker build and are not stored locally.
+test-data/*
+!test-data/test-carafe.sh

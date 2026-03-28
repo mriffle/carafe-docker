@@ -58,6 +58,8 @@ The repository is intentionally small. The current tracked files are:
 - `entrypoint.sh`: container entrypoint that executes the requested command
 - `build.sh`: helper script that requires a Carafe version, builds matching image tags, can write the Docker build output to a log file, and optionally pushes images
 - `test/test_carafe_image.sh`: local smoke test that builds the image, can forward build flags and build-log output to `build.sh`, and runs Carafe inside the container
+- `test/run_test_data_in_container.sh`: helper that mounts `test-data/` into the built container and runs `test-data/test-carafe.sh`
+- `test-data/`: sample mzML, parquet, fasta, and shell-script inputs for a mounted-data Carafe run
 - `.github/workflows/ci.yml`: GitHub Actions workflow that runs the image build and smoke test on push
 - `README.md`: minimal placeholder readme
 - `LICENSE`: Apache 2.0 license text
@@ -307,6 +309,25 @@ The smoke test does the following:
 11. Runs `java -Djava.aws.headless=true -jar /opt/carafe/carafe-<version>/carafe-<version>.jar -h`
 12. Confirms the help output contains expected Carafe CLI text
 
+### Mounted test-data run
+
+The repository also includes a mounted-data test path that runs a real Carafe command against files stored under `test-data/`.
+
+Run:
+
+```bash
+./test/run_test_data_in_container.sh 2.0.0
+```
+
+This helper does the following:
+
+1. Builds `mriffle/carafe:<version>` unless `--skip-build` is supplied
+2. Starts the container as the invoking host UID and GID
+3. Mounts `./test-data` into the container at `/test-data`
+4. Sets `CARAFE_VERSION=<version>` in the container so `test-data/test-carafe.sh` can pick the matching JAR path
+5. Runs `bash ./test-carafe.sh` with `/test-data` as the working directory
+6. Leaves `carafe.stdout` and `carafe.stderr` in the mounted `test-data/` directory on the host
+
 ### GitHub Actions CI
 
 GitHub Actions runs the smoke test on every push using:
@@ -341,6 +362,11 @@ To run the local smoke test, a developer should also have:
 
 - Docker available to the current user
 
+To run the mounted test-data helper, a developer should also have:
+
+- Docker available to the current user
+- the sample files expected by `test-data/test-carafe.sh` present in `test-data/`
+
 ## Expected Build Sequence
 
 From a clean checkout, the expected onboarding flow is:
@@ -348,8 +374,10 @@ From a clean checkout, the expected onboarding flow is:
 1. Clone this repository
 2. Choose the Carafe release version you want to build, for example `2.0.0`
 3. Run `./build.sh <version>` or a manual `docker build --build-arg CARAFE_VERSION=<version>`
-4. Optionally add `--latest-tag` if this build should also publish the `latest` tag
-5. Optionally push the tags to the configured registries
+4. Optionally run `./test/test_carafe_image.sh <version>` for the smoke test
+5. Optionally run `./test/run_test_data_in_container.sh <version>` to execute the mounted sample-data command
+6. Optionally add `--latest-tag` if this build should also publish the `latest` tag
+7. Optionally push the tags to the configured registries
 
 ## External Dependencies
 
@@ -449,9 +477,12 @@ After making changes, validate at least the following:
 1. `bash -n build.sh`
 2. `bash -n entrypoint.sh`
 3. `bash -n test/test_carafe_image.sh`
-4. Run a Docker build with an explicit `CARAFE_VERSION`
-5. Run `./test/test_carafe_image.sh <version>`
-6. If applicable, verify pushed tags exist in the target registries
+4. `bash -n test/run_test_data_in_container.sh`
+5. `bash -n test-data/test-carafe.sh`
+6. Run a Docker build with an explicit `CARAFE_VERSION`
+7. Run `./test/test_carafe_image.sh <version>`
+8. If appropriate, run `./test/run_test_data_in_container.sh <version>`
+9. If applicable, verify pushed tags exist in the target registries
 
 ## Suggested Future Improvements
 
@@ -470,8 +501,9 @@ If you need to work on this repo without reading the source files first, use thi
 3. Ensure Docker works in your environment
 4. Run `./build.sh <version>`
 5. Run `./test/test_carafe_image.sh <version>` to verify the built image and Carafe installation
-6. Use `--latest-tag` only when that version should also become `latest`
-7. If the build or smoke test fails, first check Docker permissions, network access, and upstream release availability
-8. Treat `Dockerfile`, `build.sh`, `entrypoint.sh`, `test/test_carafe_image.sh`, and `.github/workflows/ci.yml` as the key operational codepaths in the repo
+6. Run `./test/run_test_data_in_container.sh <version>` if you need to exercise the mounted sample-data workflow
+7. Use `--latest-tag` only when that version should also become `latest`
+8. If the build or test helpers fail, first check Docker permissions, network access, upstream release availability, and whether the expected `test-data/` files are present
+9. Treat `Dockerfile`, `build.sh`, `entrypoint.sh`, `test/test_carafe_image.sh`, `test/run_test_data_in_container.sh`, and `.github/workflows/ci.yml` as the key operational codepaths in the repo
 
 That is the full current system.
