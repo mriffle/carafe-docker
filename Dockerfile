@@ -43,7 +43,9 @@ COPY entrypoint.sh /usr/local/bin/
 ENV LANG=C.UTF-8 \
     LC_ALL=C.UTF-8 \
     HOME=/tmp \
-    HF_HOME=/tmp/huggingface
+    HF_HOME=/tmp/huggingface \
+    PATH="/opt/carafe-home/.carafe/.venv/bin:${PATH}" \
+    JAVA_TOOL_OPTIONS="-Duser.home=/opt/carafe-home"
 
 # Install minimal runtime dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \

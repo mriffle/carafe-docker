@@ -67,7 +67,7 @@ fi
 
 image_tag="mriffle/carafe:${carafe_version}"
 
-docker run --rm --user 12345:12345 "${image_tag}" /bin/bash -lc '
+docker run --rm --entrypoint /bin/bash --user 12345:12345 "${image_tag}" -lc '
     set -euo pipefail
 
     test ! -d /opt/conda
@@ -88,6 +88,7 @@ docker run --rm --user 12345:12345 "${image_tag}" /bin/bash -lc '
     python -c "import sys, torch; print(sys.executable); print(torch.__version__)" > /tmp/python-check.txt
     grep -q "^/opt/carafe-home/.carafe/.venv/bin/python" /tmp/python-check.txt
 
+    test "${JAVA_TOOL_OPTIONS:-}" = "-Duser.home=/opt/carafe-home"
     java -XshowSettings:properties -version > /tmp/java-settings.txt 2>&1
     grep -q "user.home = /opt/carafe-home" /tmp/java-settings.txt
 

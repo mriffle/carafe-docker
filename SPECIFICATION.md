@@ -15,7 +15,7 @@ The image bundles:
 - A prebuilt Carafe Python virtual environment installed under `/opt/carafe-home/.carafe`
 - A uv-managed CPython installation rooted under `/opt/carafe-home/uv-python` so the Carafe venv does not depend on `/root` or `/tmp`
 
-At runtime, the container prepends Carafe's shared virtual environment to `PATH`, forces Java's `user.home` to `/opt/carafe-home` by default, and then executes the command passed to the container entrypoint without Conda activation.
+At runtime, image-level environment variables prepend Carafe's shared virtual environment to `PATH` and force Java's `user.home` to `/opt/carafe-home` by default. The container entrypoint then simply executes the command passed to it without Conda activation.
 
 ## Repository Purpose
 
@@ -55,7 +55,7 @@ Any developer or LLM agent working in this repository should treat keeping this 
 The repository is intentionally small. The current tracked files are:
 
 - `Dockerfile`: multi-stage image build definition
-- `entrypoint.sh`: container entrypoint that executes the requested command
+- `entrypoint.sh`: minimal container entrypoint that simply executes the requested command
 - `build.sh`: helper script that requires a Carafe version, builds matching image tags, can write the Docker build output to a log file, and optionally pushes images
 - `test/test_carafe_image.sh`: local smoke test that builds the image, can forward build flags and build-log output to `build.sh`, and runs Carafe inside the container
 - `test/run_test_data_in_container.sh`: helper that mounts `test-data/` into the built container and runs `test-data/test-carafe.sh`
@@ -116,6 +116,8 @@ The runtime stage then:
 - Creates the uv-managed Python install root at `/opt/carafe-home/uv-python`
 - Runs `java -cp carafe-<version>.jar main.java.util.PyInstaller /opt/carafe-home/.carafe` from the unpacked Carafe release directory with `HOME=/opt/carafe-home` and `UV_PYTHON_INSTALL_DIR=/opt/carafe-home/uv-python` so the venv's interpreter symlinks stay inside the shared runtime root
 - Marks `/opt/carafe-home` world-readable so arbitrary runtime UIDs can execute the installed virtual environment
+- Sets `PATH=/opt/carafe-home/.carafe/.venv/bin:${PATH}` at the image level
+- Sets `JAVA_TOOL_OPTIONS=-Duser.home=/opt/carafe-home` at the image level
 - Creates `/tmp/huggingface`
 - Makes `/tmp/huggingface` world-writable
 - Makes the entrypoint executable
@@ -129,15 +131,14 @@ Container startup is intentionally simple.
 `entrypoint.sh` does the following:
 
 1. Enables `set -euo pipefail`
-2. Prepends `/opt/carafe-home/.carafe/.venv/bin` to `PATH` so plain `python` and `python3` resolve to Carafe's installed virtual environment
-3. Appends `-Duser.home=/opt/carafe-home` to `JAVA_TOOL_OPTIONS` unless the caller already provided a `user.home` override
-4. Replaces the shell with the user-provided command via `exec "$@"`
+2. Replaces the shell with the user-provided command via `exec "$@"`
 
 Implications:
 
 - The container no longer depends on Conda being present
 - Carafe's default `~/.carafe/.venv` lookup resolves against `/opt/carafe-home`, not the runtime user's actual home directory
 - Arbitrary numeric UIDs can still use the prebuilt Carafe Python environment because it is not stored under `/root`
+- The Python path and Java `user.home` defaults survive runtimes that do not honor Docker entrypoints, as long as they preserve image environment variables
 - The container does not define a default command in the Dockerfile
 - The caller must provide the command to run unless the orchestration environment injects one
 
@@ -297,14 +298,14 @@ To capture the Docker build log while running the smoke test:
 The smoke test does the following:
 
 1. Builds the image by calling `./build.sh <version>`
-2. Starts a container from the built image as a non-root numeric UID
+2. Starts a container from the built image as a non-root numeric UID while explicitly bypassing the Docker entrypoint
 3. Verifies the image no longer exposes the old `/opt/conda` installation path
 4. Verifies both `python` and `python3` are available in the image
 5. Verifies the shared Carafe virtual environment exists at `/opt/carafe-home/.carafe/.venv`
 6. Verifies the shared Carafe virtual environment resolves to an interpreter path inside `/opt/carafe-home`
-7. Verifies the entrypoint resolves `python` from that shared virtual environment and can import `torch`
-8. Verifies the entrypoint configures Java to use `/opt/carafe-home` as `user.home`
-9. Verifies the entrypoint no longer injects a `CONDA_DEFAULT_ENV`
+7. Verifies the baked-in image environment resolves `python` from that shared virtual environment and can import `torch`
+8. Verifies the baked-in `JAVA_TOOL_OPTIONS` configures Java to use `/opt/carafe-home` as `user.home`
+9. Verifies the image no longer injects a `CONDA_DEFAULT_ENV`
 10. Verifies the packaged Carafe JAR exists at `/opt/carafe/carafe-<version>/carafe-<version>.jar`
 11. Runs `java -Djava.aws.headless=true -jar /opt/carafe/carafe-<version>/carafe-<version>.jar -h`
 12. Confirms the help output contains expected Carafe CLI text
@@ -409,8 +410,9 @@ Important environment variables:
 - `CARAFE_UV_PYTHON_INSTALL_DIR=/opt/carafe-home/uv-python`
 - `HOME=/tmp`
 - `HF_HOME=/tmp/huggingface`
+- `PATH=/opt/carafe-home/.carafe/.venv/bin:${PATH}`
 - `CARAFE_VERSION=<build arg value in final stage>`
-- `JAVA_TOOL_OPTIONS` is extended by the entrypoint to include `-Duser.home=/opt/carafe-home` unless the caller already provided a `user.home` override
+- `JAVA_TOOL_OPTIONS=-Duser.home=/opt/carafe-home`
 
 ## Current Design Assumptions
 
@@ -421,7 +423,7 @@ A new developer or agent should understand these assumptions before making chang
 - The repo assumes Carafe's bundled `main.java.util.PyInstaller` remains the supported way to provision Carafe's Python dependencies during image build
 - The repo assumes installing Carafe's Python environment into `/opt/carafe-home/.carafe` remains compatible with Carafe's runtime lookup when Java is launched with `-Duser.home=/opt/carafe-home`
 - The repo assumes directing uv's managed CPython installation into `/opt/carafe-home/uv-python` keeps the venv self-contained enough for container runtimes that replace `/tmp` or use arbitrary UIDs
-- The repo assumes prepending `/opt/carafe-home/.carafe/.venv/bin` to `PATH` is sufficient for Carafe helper code that still invokes plain `python`
+- The repo assumes setting `PATH=/opt/carafe-home/.carafe/.venv/bin:${PATH}` in the image is sufficient for Carafe helper code that still invokes plain `python`
 - The repo assumes container callers know what command to execute
 - The repo assumes publishing to both Docker Hub and Quay
 
