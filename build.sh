@@ -9,10 +9,11 @@ image_names=("mriffle/carafe" "quay.io/protio/carafe")
 carafe_version=""
 push=false
 tag_latest=false
+build_log=""
 
 print_usage() {
     cat <<'EOF'
-Usage: ./build.sh <carafe-version> [--push] [--latest-tag]
+Usage: ./build.sh <carafe-version> [--push] [--latest-tag] [--build-log <path>]
 
 Arguments:
   <carafe-version>  Carafe release version, for example: 2.0.0
@@ -20,12 +21,14 @@ Arguments:
 Options:
   --push            Push images after building
   --latest-tag      Also tag and optionally push the images as :latest
+  --build-log       Write docker build output to the specified log file
   -h, --help        Show this help message
 
 Examples:
   ./build.sh 2.0.0
   ./build.sh 2.0.0 --push
   ./build.sh 2.0.0 --push --latest-tag
+  ./build.sh 2.0.0 --build-log /tmp/carafe-build.log
 EOF
 }
 
@@ -52,7 +55,13 @@ build_images() {
     printf ' %q' "${build_command[@]}"
     printf '\n'
 
-    DOCKER_BUILDKIT=1 "${build_command[@]}"
+    if [[ -n "${build_log}" ]]; then
+        mkdir -p "$(dirname "${build_log}")"
+        echo "Writing Docker build log to ${build_log}"
+        env DOCKER_BUILDKIT=1 "${build_command[@]}" 2>&1 | tee "${build_log}"
+    else
+        DOCKER_BUILDKIT=1 "${build_command[@]}"
+    fi
 }
 
 push_images() {
@@ -77,6 +86,15 @@ while [[ "$#" -gt 0 ]]; do
             ;;
         --latest-tag)
             tag_latest=true
+            ;;
+        --build-log)
+            if [[ "$#" -lt 2 ]]; then
+                echo "--build-log requires a path argument." >&2
+                print_usage
+                exit 1
+            fi
+            build_log="$2"
+            shift
             ;;
         -h|--help)
             print_usage

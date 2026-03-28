@@ -1,9 +1,12 @@
 #!/usr/bin/env bash
 
-set -e
+set -euo pipefail
 
-# Activate the Conda environment
-source /opt/conda/etc/profile.d/conda.sh
-conda activate carafe
+carafe_python_root="${CARAFE_RUNTIME_HOME:-/opt/carafe-home}/.carafe/.venv/bin"
+export PATH="${carafe_python_root}:${PATH}"
+
+if [[ "${JAVA_TOOL_OPTIONS:-}" != *"-Duser.home="* ]]; then
+    export JAVA_TOOL_OPTIONS="${JAVA_TOOL_OPTIONS:+${JAVA_TOOL_OPTIONS} }-Duser.home=${CARAFE_RUNTIME_HOME:-/opt/carafe-home}"
+fi
 
 exec "$@"
