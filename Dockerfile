@@ -62,7 +62,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && cd "/opt/carafe/carafe-${CARAFE_VERSION}" \
     && HOME="${CARAFE_RUNTIME_HOME}" UV_PYTHON_INSTALL_DIR="${CARAFE_UV_PYTHON_INSTALL_DIR}" \
         java -cp "carafe-${CARAFE_VERSION}.jar" main.java.util.PyInstaller "${CARAFE_RUNTIME_HOME}/.carafe" \
-    && chmod -R a+rX "${CARAFE_RUNTIME_HOME}"
+    && chmod -R a+rX "${CARAFE_RUNTIME_HOME}" \
+    && chmod -R a+rX /opt/carafe \
+    && find /opt/carafe -type f -path '*/bin/*' -exec chmod a+x {} +
 
 # Set the working directory
 WORKDIR /app

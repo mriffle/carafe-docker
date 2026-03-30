@@ -117,6 +117,7 @@ The runtime stage then:
 - Creates the uv-managed Python install root at `/opt/carafe-home/uv-python`
 - Runs `java -cp carafe-<version>.jar main.java.util.PyInstaller /opt/carafe-home/.carafe` from the unpacked Carafe release directory with `HOME=/opt/carafe-home` and `UV_PYTHON_INSTALL_DIR=/opt/carafe-home/uv-python` so the venv's interpreter symlinks stay inside the shared runtime root
 - Marks `/opt/carafe-home` world-readable so arbitrary runtime UIDs can execute the installed virtual environment
+- Marks `/opt/carafe` world-readable and ensures native binaries under `bin/` subdirectories are executable, so non-root container users can run bundled tools like `timsquery_cli`
 - Sets `PATH=/opt/carafe-home/.carafe/.venv/bin:${PATH}` at the image level
 - Sets `JAVA_TOOL_OPTIONS=-Duser.home=/opt/carafe-home` at the image level
 - Creates `/tmp/huggingface`
