@@ -56,8 +56,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3-pip \
     python3-venv \
     && rm -rf /var/lib/apt/lists/* \
-    && mkdir -p /tmp/huggingface "${CARAFE_RUNTIME_HOME}" "${CARAFE_UV_PYTHON_INSTALL_DIR}" \
-    && chmod 777 /tmp/huggingface \
+    && mkdir -p "${CARAFE_RUNTIME_HOME}" "${CARAFE_UV_PYTHON_INSTALL_DIR}" \
     && chmod +x /usr/local/bin/entrypoint.sh \
     && cd "/opt/carafe/carafe-${CARAFE_VERSION}" \
     && HOME="${CARAFE_RUNTIME_HOME}" UV_PYTHON_INSTALL_DIR="${CARAFE_UV_PYTHON_INSTALL_DIR}" \
@@ -65,6 +64,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && chmod -R a+rX "${CARAFE_RUNTIME_HOME}" \
     && chmod -R a+rX /opt/carafe \
     && find /opt/carafe -type f -path '*/bin/*' -exec chmod a+x {} +
+
+# Pre-download peptdeep pretrained models at build time to /data/peptdeep.
+# Carafe's models.py checks /data/peptdeep/pretrained_models/ as a fallback
+# location regardless of HOME, and /data survives Apptainer's /tmp overlay.
+RUN mkdir -p /data \
+    && HOME=/data python -c "import peptdeep.pretrained_models" \
+    && chmod -R a+rX /data/peptdeep
 
 # Set the working directory
 WORKDIR /app
